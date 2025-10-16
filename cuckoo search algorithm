@@ -1,0 +1,102 @@
+import random
+
+# Example graph
+graph = {
+    'A': {'B': 1, 'C': 4},
+    'B': {'A': 1, 'C': 2, 'D': 5},
+    'C': {'A': 4, 'B': 2, 'D': 1},
+    'D': {'B': 5, 'C': 1}
+}
+
+start_node = 'A'
+end_node = 'D'
+
+def path_cost(graph, path):
+    cost = 0
+    for i in range(len(path) - 1):
+        cost += graph[path[i]][path[i+1]]
+    return cost
+
+def get_neighbors(graph, node):
+    return list(graph[node].keys())
+
+def random_path(graph, start, end):
+    """Generate a random valid path from start to end."""
+    path = [start]
+    current = start
+    visited = set(path)
+    while current != end:
+        neighbors = get_neighbors(graph, current)
+        # Exclude already visited nodes to avoid cycles (optional)
+        neighbors = [n for n in neighbors if n not in visited]
+        if not neighbors:
+            # Dead end: restart path generation
+            return random_path(graph, start, end)
+        current = random.choice(neighbors)
+        path.append(current)
+        visited.add(current)
+    return path
+
+def mutate_path(graph, path):
+    """Mutate path by swapping two nodes (except start/end) or inserting a node."""
+    if len(path) <= 3:
+        # Too short to mutate meaningfully
+        return path
+    new_path = path.copy()
+    # Swap two random internal nodes
+    i, j = random.sample(range(1, len(path)-1), 2)
+    new_path[i], new_path[j] = new_path[j], new_path[i]
+
+    # Validate mutated path: each consecutive pair must be connected
+    for k in range(len(new_path)-1):
+        if new_path[k+1] not in graph[new_path[k]]:
+            # Invalid path; return original
+            return path
+    return new_path
+
+def cuckoo_search_path(graph, start, end, n=15, pa=0.25, n_iter=100):
+    nests = [random_path(graph, start, end) for _ in range(n)]
+    fitness = [path_cost(graph, nest) for nest in nests]
+
+    best_idx = fitness.index(min(fitness))
+    best_nest = nests[best_idx]
+    best_fitness = fitness[best_idx]
+    fitness_history = [best_fitness]
+
+    for _ in range(n_iter):
+        # Generate new solutions by mutation
+        for i in range(n):
+            new_nest = mutate_path(graph, nests[i])
+            new_fitness = path_cost(graph, new_nest)
+            if new_fitness < fitness[i]:
+                nests[i] = new_nest
+                fitness[i] = new_fitness
+                if new_fitness < best_fitness:
+                    best_nest = new_nest
+                    best_fitness = new_fitness
+
+        # Abandon some nests and generate new random ones
+        n_abandon = int(pa * n)
+        worst_idx = sorted(range(n), key=lambda i: fitness[i], reverse=True)[:n_abandon]
+        for idx in worst_idx:
+            nests[idx] = random_path(graph, start, end)
+            fitness[idx] = path_cost(graph, nests[idx])
+            if fitness[idx] < best_fitness:
+                best_nest = nests[idx]
+                best_fitness = fitness[idx]
+
+        fitness_history.append(best_fitness)
+
+    return best_nest, best_fitness, fitness_history
+
+# Run example
+best_path, best_cost, history = cuckoo_search_path(graph, start_node, end_node, n=20, pa=0.3, n_iter=50)
+print("Best path:", best_path)
+print("Best cost:", best_cost)
+
+
+
+
+output
+Best path: ['A', 'B', 'C', 'D']
+Best cost: 4
